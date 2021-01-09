@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <script type="application/javascript">
+        const sx = 10;
+        const sy = 10;
+        const sw = 40;
+        const sh = 40;
+        const si = 2;
+        const sj = 2;
+
+        // source: https://htmlcolorcodes.com, 4th row from top/bottom
+        let colors = {
+            'Rose': 'rgb(241, 148, 138)',
+            // 'Orange': 'rgb(248, 196, 113)',
+            'Orange': 'rgb(243, 156, 18)',
+            'Brown': 'rgb(186, 74, 0)',
+            'Black': 'rgb(39, 55, 70)',
+            'Dark Blue': 'rgb(36, 113, 163)',
+            'Light Blue': 'rgb(133, 193, 233)',
+            'Yellow': 'rgb(247, 220, 111)',
+            'Light Green': 'rgb(125, 206, 160)',
+            'Dark Green': 'rgb(19, 141, 117)',
+            'Cherry': 'rgb(136, 78, 160)',
+            'Grey': 'rgb(215, 219, 221)',
+            'Red': 'rgb(207, 67, 53)',
+            'White': 'rgb(244, 246, 247)',
+        };
+        let pieces = [];
+        let problems = {};
+        let library = {};
+
+        async function load() {
+            pieces = await (await fetch('pieces.json')).json();
+            problems = await (await fetch('problems.json')).json();
+            library = await (await fetch('library.json')).json();
+
+            let div_pieces = document.getElementById('pieces');
+            for(let i = 0; i < pieces.length; i++) {
+                let canvas_piece = document.createElement('canvas');
+                canvas_piece.setAttribute('id', 'piece_' + i.toString());
+                draw_piece(i, canvas_piece, 0.5, 0, 2 * sy + 3 * (sh * 0.5 + sj) - sj);
+                div_pieces.appendChild(canvas_piece);
+            }
+
+            populate_groups();
+        }
+
+        function populate_groups() {
+            let select_groups = document.getElementById('groups');
+            select_groups.textContent = '';
+            Object.keys(problems).forEach((group, number) => {
+                let option_group = document.createElement('option');
+                option_group.id = 'group_' + number.toString();
+                option_group.value = group;
+                option_group.textContent = group;
+                select_groups.appendChild(option_group);
+            });
+            populate_problems(select_groups.value);
+        }
+
+        function populate_problems(group) {
+            let select_problems = document.getElementById('problems');
+            select_problems.textContent = '';
+            problems[group].forEach((problem, number) => {
+                let option_problem = document.createElement('option');
+                option_problem.id = 'problem_' + number.toString();
+                option_problem.value = problem;
+                option_problem.textContent = problem;
+                select_problems.appendChild(option_problem);
+            });
+            display_solution(select_problems.value);
+        }
+
+        function display_solution(problem, index = 0) {
+            let canvas_solution = document.getElementById('canvas_solution');
+            canvas_solution.dataset.problem = problem;
+            canvas_solution.dataset.solution = index.toString();
+            if (document.getElementById('step_0').checked) {
+                draw_solution_all_steps(canvas_solution);
+            } else {
+                draw_solution_first_step(canvas_solution);
+            }
+        }
+
+        function draw_piece(index, canvas, scale = 1, width = 0, height = 0) {
+            if (canvas.getContext) {
+                let piece = pieces[index];
+                let shape = piece[3];
+
+                canvas.width = width === 0 ? 2 * sx + shape[0].length * (sw * scale + si) - si : width;
+                canvas.height = height === 0 ? 2 * sy + shape.length * (sh * scale + sj) - sj : height;
+
+                let ctx = canvas.getContext('2d');
+                for (let j = 0; j < shape.length; j++) {
+                    for (let i = 0; i < shape[0].length; i++) {
+                        if (shape[j][i] === 1) {
+                            ctx.fillStyle = colors[piece[2]];
+                        } else {
+                            ctx.fillStyle = colors['White'];
+                        }
+                        ctx.fillRect(sx + i * (sw * scale + si), sy + j * (sh * scale + sj), sw * scale, sh * scale);
+                    }
+                }
+            }
+        }
+
+        function draw_solution(problem, index, canvas, scale = 1, width = 0, height = 0, step = 0) {
+            if (canvas.getContext) {
+                let fw = parseInt(problem.substring(0, 2), 16);
+                let fh = parseInt(problem.substring(3, 5), 16);
+                let fp = [];
+                for (let i = 6; i < problem.length; i++) {
+                    fp[i - 6] = pieces[parseInt(problem.substring(i, i + 1), 16) - 1]
+                }
+
+                let solutions = library[problem];
+                let solution = solutions[index];
+
+                canvas.width = width === 0 ? 2 * sx + fw * (sw * scale + si) - si : width;
+                canvas.height = height === 0 ? 2 * sy + fh * (sh * scale + sj) - sj : height;
+
+                canvas.dataset.step = step > 0 && step < solution.length ? step : solution.length;
+
+                let ctx = canvas.getContext('2d');
+                for (let j = 0; j < fh; j++) {
+                    for (let i = 0; i < fw; i++) {
+                        ctx.fillStyle = colors['White'];
+                        ctx.fillRect(sx + i * (sw * scale + si), sy + j * (sh * scale + sj), sw * scale, sh * scale);
+                    }
+                }
+
+                for (let k = 0; k < (step > 0 && step < solution.length ? step : solution.length); k++) {
+                    let card_hex = solution[k];
+                    let card_bin = '';
+                    for (let l = 0; l < card_hex.length; l++) {
+                        card_bin += parseInt(card_hex[l], 16).toString(2).padStart(4, '0');
+                    }
+                    card_bin = card_bin.slice(card_bin.length - (fw * fh + fp.length));
+
+                    let card_num = 0;
+                    let card = [];
+                    for (let l = 0; l < card_bin.length; l++) {
+                        let value = parseInt(card_bin[l], 10);
+                        card[l] = value;
+                        if (l >= fw * fh) {
+                            if (value === 1) {
+                                card_num = l - fw * fh;
+                            }
+                        }
+                    }
+
+                    for (let j = 0; j < fh; j++) {
+                        for (let i = 0; i < fw; i++) {
+                            if (card[j * fw + i] === 1) {
+                                ctx.fillStyle = colors[fp[card_num][2]];
+                                ctx.fillRect(sx + i * (sw * scale + si), sy + j * (sh * scale + sj), sw * scale, sh * scale);
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+        function draw_solution_next_step(canvas, scale = 1, width = 0, height = 0) {
+            draw_solution(canvas.dataset.problem, parseInt(canvas.dataset.solution, 10), canvas, scale, width, height, parseInt(canvas.dataset.step, 10) + 1);
+        }
+
+        function draw_solution_prev_step(canvas, scale = 1, width = 0, height = 0) {
+            draw_solution(canvas.dataset.problem, parseInt(canvas.dataset.solution, 10), canvas, scale, width, height, parseInt(canvas.dataset.step, 10) - 1);
+        }
+
+        function draw_solution_first_step(canvas, scale = 1, width = 0, height = 0) {
+            draw_solution(canvas.dataset.problem, canvas.dataset.solution, canvas, scale, width, height, 1);
+        }
+
+        function draw_solution_all_steps(canvas, scale = 1, width = 0, height = 0) {
+            draw_solution(canvas.dataset.problem, canvas.dataset.solution, canvas, scale, width, height, 0);
+        }
+
+        function draw_test() {
+            if (canvas.getContext) {
+                let ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = 'rgb(200, 0, 0)';
+                ctx.fillRect(10, 10, 50, 50);
+
+                ctx.fillStyle = 'rgba(0, 0, 200, 0.5)';
+                ctx.fillRect(30, 30, 50, 50);
+            }
+        }
+
+        function fetch_json(url) {
+            return fetch(url).then(res => res.json()).then((out) => {
+                console.log('Checkout this JSON! ', out);
+            }).catch(err => {
+                throw err
+            });
+        }
+    </script>
+</head>
+<body onload="load();">
+    <div id="pieces"></div>
+    <div id="management">
+        <p>Choose a size and a problem:</p>
+        <p>
+            <label for="groups">Group: </label><select id="groups" name="groups" onchange="populate_problems(this.value);"></select>
+            <label for="problems">Problem: </label><select id="problems" name="problems" onchange="display_solution(this.value);"></select>
+        </p>
+        <p>What to display after the problem is chosen:</p>
+        <p>
+            <input type="radio" id="step_0" name="step" value="0"><label for="step_0">All steps</label>
+            <input type="radio" id="step_1" name="step" value="1" checked><label for="step_1">First step</label>
+        </p>
+        <p>Use the following buttons to navigate along the steps:</p>
+        <p>
+            <button type="button" id="first" onclick="draw_solution_first_step(document.getElementById('canvas_solution'));">|&lt;&lt;</button>
+            <button type="button" id="prev" onclick="draw_solution_prev_step(document.getElementById('canvas_solution'));">&lt;</button>
+            <button type="button" id="next" onclick="draw_solution_next_step(document.getElementById('canvas_solution'));">&gt;</button>
+            <button type="button" id="all" onclick="draw_solution_all_steps(document.getElementById('canvas_solution'));">&gt;&gt;|</button>
+        </p>
+    </div>
+    <div id="solution">
+        <canvas id="canvas_solution" width="100" height="100"></canvas>
+    </div>
+</body>
+</html>
